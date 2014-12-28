@@ -1,4 +1,4 @@
-with import <nixpkgs> {};
+{ stdenv, fetchgit, xlibs, ... }:
 
 stdenv.mkDerivation {
   name = "cantora-dmenu";
