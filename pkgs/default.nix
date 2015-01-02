@@ -13,7 +13,8 @@ let
   #self = rec { };
   callPackage = pkgs.lib.callPackageWith pkgs;
 
-in [
-  (callPackage ./dwm { })
-  (callPackage ./dmenu { })
+in map (path: callPackage path { }) [
+  ./dwm
+  ./dmenu
+  ./xorg.conf
 ]
