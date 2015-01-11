@@ -1,0 +1,324 @@
+* nix pill
+** 2
+http://lethalman.blogspot.com/2014/07/nix-pill-2-install-on-your-running.html
+*** overview of components
+**** /nix/store
+contains package derivations
+**** database
+/nix/var/nix/db/db.sqlite
+tracks dependencies between derivations
+**** profile
+$HOME/.nix-profile
+versioned symlink to user environment
+**** nixpkgs
+** 3
+*** installing
+nix-env -i nix-repl
+*** listing profile generations
+nix-env --list-generations
+*** rollback
+nix-env --rollback
+*** querying
+**** runtime references
+nix-store -q --references `which nix-repl`
+**** reverse dependencies
+nix-store -q --referrers `which nix-repl`
+**** closure (recursive dependency listing)
+nix-store -qR `which man`
+nix-store -q --tree `which man`
+*** overview of channels
+** 4
+*** overview of nix expressions
+**** interpolation
+nix-repl> "${foo}"
+"strval"
+nix-repl> ''test " test''
+"test \" test"
+nix-repl> ''${foo}''
+"strval"
+nix-repl> "\${foo}"
+"${foo}"
+nix-repl> ''test ''${foo} test''
+"test ${foo} test"
+**** recursive sets
+You cannot refer inside a set to elements of the same set:
+
+nix-repl> { a = 3; b = a+4; }
+error: undefined variable `a' at (string):1:10
+
+To do so, use recursive sets:
+
+nix-repl> rec { a= 3; b = a+4; }
+{ a = 3; b = 7; }
+
+**** with set shadowing
+If a symbol exists in the outer scope and also in the "with" scope, it will not be shadowed. You can however still refer to the set:
+
+nix-repl> longName = { a = 3; b = 4; }
+nix-repl> let a = 10; in with longName; a + b
+14
+nix-repl> let a = 10; in with longName; longName.a + b
+7
+** 5
+*** function basics
+*** set pattern matching
+nix-repl> mul = s: s.a*s.b
+nix-repl> mul { a = 3; b = 4; }
+12
+nix-repl> mul = { a, b }: a*b
+nix-repl> mul { a = 3; b = 4; }
+12
+nix-repl> mul { a = 3; b = 4; c = 6; }
+error: anonymous function at (string):1:2 called with unexpected argument `c', at (string):1:1
+nix-repl> mul { a = 3; }
+error: anonymous function at (string):1:2 called without required argument `b', at (string):1:1
+
+nix-repl> mul = { a, b ? 2 }: a*b
+nix-repl> mul { a = 3; }
+6
+nix-repl> mul { a = 3; b = 4; }
+12
+
+nix-repl> mul = { a, b, ... }: a*b
+nix-repl> mul { a = 3; b = 4; c = 2; }
+
+nix-repl> mul = s@{ a, b, ... }: a*b*s.c
+nix-repl> mul { a = 3; b = 4; c = 2; }
+24
+
+*** importing
+ Let's start with the bare metal.
+
+a.nix:
+
+3
+
+b.nix:
+
+4
+
+mul.nix:
+
+a: b: a*b
+
+nix-repl> a = import ./a.nix
+nix-repl> b = import ./b.nix
+nix-repl> mul = import ./mul.nix
+nix-repl> mul a b
+12
+** 6
+http://lethalman.blogspot.it/2014/07/nix-pill-6-our-first-derivation.html
+*** overview of the derivation function
+*** drv files
+- .nix files are like .c files
+- .drv files are intermediate files like .o files. The .drv describes how to build a derivation, it's the bare minimum information.
+- out paths are then the product of the build
+
+** 7
+http://lethalman.blogspot.it/2014/07/nix-pill-7-working-derivation.html
+*** overview of derivation builder scripts
+*** builder env
+ - $HOME is not your home, and /homeless-shelter doesn't exist at all. We force packages to not depend upon $HOME during the build process.
+ - $PATH plays the same game of $HOME
+ - $NIX_BUILD_CORES and $NIX_STORE are nix configurations
+ - $PWD and $TMP clearly shows nix created a temporary build directory.
+ - Then builder, name, out and system are variables set due to the .drv contents.
+
+*** drv contents
+files needed for build are copied into the store and hashed
+based on their contents and name.
+*** demonstration of building a derivation simple c program
+**** nix
+with (import <nixpkgs> {});
+derivation {
+  name = "simple";
+  builder = "${bash}/bin/bash";
+  args = [ ./simple_builder.sh ];
+  inherit gcc coreutils;
+  src = ./simple.c;
+  system = builtins.currentSystem;
+}
+**** builder
+export PATH="$coreutils/bin:$gcc/bin"
+mkdir $out
+gcc -o $out/simple $src
+**** simple.c
+void main () {
+  puts ("Simple!");
+}
+
+** 8
+http://lethalman.blogspot.it/2014/08/nix-pill-8-generic-builders.html
+*** packaging gnu hello world
+**** hello_builder.sh 
+export PATH="$gnutar/bin:$gcc/bin:$gnumake/bin:$coreutils/bin:$gawk/bin:$gzip/bin:$gnugrep/bin:$gnused/bin:$binutils/bin"
+tar -xzf $src
+cd hello-2.9
+./configure --prefix=$out
+make
+make install
+**** nix
+with (import <nixpkgs> {});
+derivation {
+  name = "hello";
+  builder = "${bash}/bin/bash";
+  args = [ ./hello_builder.sh ];
+  inherit gnutar gzip gnumake gcc binutils coreutils gawk gnused gnugrep;
+  src = ./hello-2.9.tar.gz;
+  system = builtins.currentSystem;
+}
+
+*** generic builder
+**** script
+set -e
+unset PATH
+for p in $buildInputs; do
+  export PATH=$p/bin${PATH:+:}$PATH
+done
+
+tar -xf $src
+
+for d in *; do
+  if [ -d "$d" ]; then
+    cd "$d"
+    break
+  fi
+done
+
+./configure --prefix=$out
+make
+make install
+**** autotools.nix
+pkgs: attrs:
+  with pkgs;
+  let defaultAttrs = {
+    builder = "${bash}/bin/bash";
+    args = [ ./builder.sh ];
+    baseInputs = [ gnutar gzip gnumake gcc binutils coreutils gawk gnused gnugrep ];
+    buildInputs = [];
+    system = builtins.currentSystem;
+  };
+  in
+  derivation (defaultAttrs // attrs)
+**** hello
+let
+  pkgs = import <nixpkgs> {};
+  mkDerivation = import ./autotools.nix pkgs;
+in mkDerivation {
+  name = "hello";
+  src = ./hello-2.9.tar.gz;
+}
+** 9
+http://lethalman.blogspot.it/2014/08/nix-pill-9-automatic-runtime.html
+*** nar files
+deterministic archiver
+*** runtime dependencies
+determed by searching for nix store paths of dependencies in NAR archive of the derivation
+** 10
+http://lethalman.blogspot.it/2014/08/nix-pill-10-developing-with-nix-shell.html
+*** nix-shell
+create a shell with dependencies needed for building a derivation
+** 11
+http://lethalman.blogspot.it/2014/08/nix-pill-10-developing-with-nix-shell.html
+*** garbage collector
+roots tracked at /nix/var/nix/gcroots
+*** indirect GC roots
+nix-build will add a symlink to the build result in the current directory.
+it also adds a symlink to the result symlink at /nix/var/nix/gcroots/auto.
+removing the result symlink will allow the built derivation to be freed
+during garbage collection.
+*** cleanup everything
+$ nix-channel --update
+$ nix-env -u --always
+$ rm /nix/var/nix/gcroots/auto/*
+$ nix-collect-garbage -d
+** 12
+http://lethalman.blogspot.it/2014/08/nix-pill-12-inputs-design-pattern.html
+*** automatic population of include and linker args
+for p in $baseInputs $buildInputs; do
+  if [ -d $p/bin ]; then
+    export PATH="$p/bin${PATH:+:}$PATH"
+  fi
+  if [ -d $p/include ]; then
+    export NIX_CFLAGS_COMPILE="-I $p/include${NIX_CFLAGS_COMPILE:+ }$NIX_CFLAGS_COMPILE"
+  fi
+  if [ -d $p/lib ]; then
+    export NIX_LDFLAGS="-rpath $p/lib -L $p/lib${NIX_LDFLAGS:+ }$NIX_LDFLAGS"
+  fi
+done
+** 13
+http://lethalman.blogspot.it/2014/09/nix-pill-13-callpackage-design-pattern.html
+*** implement callpackage and repository using it
+let
+  nixpkgs = import <nixpkgs> {};
+  allPkgs = nixpkgs // pkgs;
+  callPackage = path: overrides:
+    let f = import path;
+    in f ((builtins.intersectAttrs (builtins.functionArgs f) allPkgs) // overrides);
+  pkgs = with nixpkgs; {
+    mkDerivation = import ./autotools.nix nixpkgs;
+    hello = callPackage ./hello.nix { };
+    graphviz = callPackage ./graphviz.nix { };
+    graphvizCore = callPackage ./graphviz.nix { gdSupport = false; };
+  };
+in pkgs
+** 14
+http://lethalman.blogspot.it/2014/09/nix-pill-14-override-design-pattern.html
+*** overridable function calls
+rec {
+  makeOverridable = f: origArgs:
+    let
+      origRes = f origArgs;
+    in
+      origRes // { override = newArgs: makeOverridable f (origArgs // newArgs); };
+}
+** 15
+http://lethalman.blogspot.it/2014/09/nix-pill-15-nix-search-paths.html
+*** nix search path example
+$ nix-instantiate --eval -E '<ping>'
+error: file `ping' was not found in the Nix search path (add it using $NIX_PATH or -I)
+$ NIX_PATH=$PATH nix-instantiate --eval -E '<ping>'
+/bin/ping
+$ nix-instantiate -I /bin --eval -E '<ping>'
+/bin/ping
+*** name=val form
+The NIX_PATH also accepts a different yet very handy syntax: "somename=somepath". That is, instead of searching inside a directory for a name, we specify exactly the value of that name.
+
+**** example
+$ NIX_PATH="ping=/bin/ping" nix-instantiate --eval -E '<ping>'
+/bin/ping
+$ NIX_PATH="ping=/bin/foo" nix-instantiate --eval -E '<ping>'
+error: file `ping' was not found in the Nix search path (add it using $NIX_PATH or -I)
+
+Note in the second case how Nix checks whether the path exists or not.
+*** command to show nixpkgs path
+$ nix-instantiate --eval -E '<nixpkgs>'
+*** how nix-env is different
+The nix-env command uses ~/.nix-defexpr, which is also part of NIX_PATH by default, but that's only a coincidence. If you empty NIX_PATH, nix-env will still be able to find derivations because of ~/.nix-defexpr.
+
+So if you run nix-env -i graphviz inside your repository, it will install the nixpkgs one. Same if you set NIX_PATH to point to your repository.
+
+In order to specify an alternative to ~/.nix-defexpr it's possible to use the -f option:
+
+$ nix-env -f '<mypkgs>' -i graphviz
+** 17
+*** overriding a set with fixed point
+nix-repl> fix = f: let result = f result; in result
+nix-repl> pkgs = self: { a = 3; b = 4; c = self.a+self.b; }
+nix-repl> fix pkgs
+{ a = 3; b = 4; c = 7; }
+nix-repl> overrides = { a = 1; b = 2; }
+nix-repl> let newpkgs = pkgs (newpkgs // overrides); in newpkgs
+{ a = 3; b = 4; c = 3; }
+nix-repl> let newpkgs = pkgs (newpkgs // overrides); in newpkgs // overrides
+{ a = 1; b = 2; c = 3; }
+*** overriding a package
+config.nix:
+{
+  packageOverrides = pkgs: {
+    graphviz = pkgs.graphviz.override { xlibs = null; };
+  };
+}
+*** ~/.nixpkgs/config.nix
+In the previous pill we already talked about this file. The above config.nix that we just wrote could be the content of ~/.nixpkgs/config.nix.
+Instead of passing it explicitly whenever we import nixpkgs, it will be automatically imported by nixpkgs.
