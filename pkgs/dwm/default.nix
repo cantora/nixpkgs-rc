@@ -6,7 +6,7 @@ stdenv.mkDerivation {
   src = fetchgit {
     url       = "https://github.com/cantora/dwm.git";
     rev       = "refs/heads/cantora";
-    sha256    = "0dv0z365qbl9g97m2zsd42c5j20barfgx3rz8q449spx6ifz404y";
+    sha256    = "1lnhdcnmikmr8i6hkxkgr9haypryx4v4x40rp73fwx8bibkdgn3i";
   };
 
   buildInputs = with xlibs; [ libX11 libXinerama ];

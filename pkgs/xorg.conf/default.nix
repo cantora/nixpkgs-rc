@@ -102,9 +102,14 @@ let
   in concatMapStrings (getAttr "value") monitors;
 
 in stdenv.mkDerivation rec {
-  name = "xorg.conf";
+  name = "cantora-xorg.conf";
 
   inherit fonts modules;
+  #xinit package needs this for its environment
+  ld_library_path = concatStringsSep ":" (
+    [ "${xorg.libX11}/lib" "${xorg.libXext}/lib" ]
+    ++ concatLists (catAttrs "libPath" drivers)
+  );
 
   xkbDir = "${xkeyboard_config}/etc/X11/xkb";
 
@@ -221,7 +226,7 @@ in stdenv.mkDerivation rec {
         fi
       done
 
-      echo "  XkbDir $xkbDir" >> $out
+      echo "  XkbDir \"$xkbDir\"" >> $out
 
       echo 'EndSection' >> $out
 

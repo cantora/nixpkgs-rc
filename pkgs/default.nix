@@ -1,20 +1,13 @@
-{ system ? builtins.currentSystem }:
+{ pkgs, system ? builtins.currentSystem, ... }:
 
-#based on sandervanderburg.blogspot.com/2014/07/managing-private-nix-packages-outside.html
 let
-  pkgs = import <nixpkgs> { inherit system; };
-  
-  #dont currently need this because we dont override any dependencies
-  #callPackage = pkgs.lib.callPackageWith (
-  #  pkgs
-  #  // pkgs.xlibs
-  #  // self
-  #);
-  #self = rec { };
-  callPackage = pkgs.lib.callPackageWith pkgs;
-
-in map (path: callPackage path { }) [
-  ./dwm
-  ./dmenu
-  ./xorg.conf
-]
+  callPackage = pkgs.lib.callPackageWith (
+    pkgs // { inherit cantora; }
+  );
+  cantora = {
+    xorgconfig = callPackage ./xorg.conf {};
+    dwm        = callPackage ./dwm {};
+    dmenu      = callPackage ./dmenu {};
+    xinit      = callPackage ./xinit {};
+  };
+in cantora
