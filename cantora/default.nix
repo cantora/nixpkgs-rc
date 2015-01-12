@@ -1,4 +1,4 @@
-{ pkgs, system ? builtins.currentSystem, ... }:
+{ pkgs, ... }:
 
 let
   callPackage = pkgs.lib.callPackageWith (
@@ -9,5 +9,6 @@ let
     dwm        = callPackage ./dwm {};
     dmenu      = callPackage ./dmenu {};
     xinit      = callPackage ./xinit {};
+    categories = callPackage ./categories {};
   };
 in cantora
