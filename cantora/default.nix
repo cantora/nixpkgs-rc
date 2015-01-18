@@ -10,5 +10,6 @@ let
     dmenu      = callPackage ./dmenu {};
     xinit      = callPackage ./xinit {};
     categories = callPackage ./categories {};
+    i18n       = callPackage ./i18n {};
   };
 in cantora
