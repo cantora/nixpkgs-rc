@@ -12,5 +12,6 @@ let
     categories = callPackage ./categories {};
     i18n       = callPackage ./i18n {};
     udev       = callPackage ./udev {};
+    keymap     = callPackage ./keymap {};
   };
 in cantora
