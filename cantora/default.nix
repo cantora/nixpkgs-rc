@@ -11,5 +11,6 @@ let
     xinit      = callPackage ./xinit {};
     categories = callPackage ./categories {};
     i18n       = callPackage ./i18n {};
+    udev       = callPackage ./udev {};
   };
 in cantora

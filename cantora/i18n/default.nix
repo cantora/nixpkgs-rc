@@ -1,8 +1,7 @@
-{ ... }:
+{ pkgs, ... }:
 
 {
-      #consoleFont = "${pkgs.terminus_font}/share/consolefonts/ter-120n.psf.gz";
-      consoleFont = "Lat2-Terminus16";
+      consoleFont = "${pkgs.terminus_font}/share/consolefonts/ter-116n.psf.gz";
       consoleKeyMap = "us";
       defaultLocale = "en_US.UTF-8";
 }
